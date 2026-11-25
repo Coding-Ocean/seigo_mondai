@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f5f7fb">
+  <title> C言語の正誤問題</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="questions-data.js" defer></script>
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <main class="page-shell">
+    <header class="page-header">
+      <p class="eyebrow">C LANGUAGE · QUIZ</p>
+      <h1 id="page-title">C言語の正誤問題</h1>
+      <p class="intro">各問題を読んで、「正」か「誤」を選んでください。</p>
+    </header>
+
+    <section class="quiz-panel" aria-labelledby="page-title">
+      <div id="status" class="status" role="status" aria-live="polite">問題を読み込み中です…</div>
+      <ol id="question-list" class="question-list" aria-label="出題一覧"></ol>
+      <div id="celebration" class="celebration" role="status" aria-live="polite" hidden>
+        <div class="firework" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
+        <div class="celebration-copy"><span class="celebration-kicker">PERFECT!</span><strong>全問正解！</strong><span>すばらしい！5問すべて正解です。</span></div>
+        <div class="firework firework-right" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
+      </div>
+      <div class="panel-footer">
+        <p id="progress" class="progress" aria-live="polite"></p>
+        <button id="new-questions" class="new-button" type="button" disabled>新しい問題</button>
+      </div>
+    </section>
+  </main>
+</body>
+</html>
