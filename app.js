@@ -8,6 +8,8 @@ const celebrationElement = document.querySelector("#celebration");
 
 let allQuestions = [];
 let currentQuestions = [];
+let remainingQuestions = [];
+let currentSetNumber = 0;
 
 function parseQuestions(markdown) {
   const lines = markdown.replace(/^\uFEFF/, "").split(/\r?\n/);
@@ -32,14 +34,14 @@ function parseQuestions(markdown) {
   return { title, questions };
 }
 
-function chooseRandomQuestions(questions, count) {
+function shuffleQuestions(questions) {
   const shuffled = [...questions];
   // Fisher–Yates shuffle gives each possible ordering equal probability.
   for (let index = shuffled.length - 1; index > 0; index -= 1) {
     const other = Math.floor(Math.random() * (index + 1));
     [shuffled[index], shuffled[other]] = [shuffled[other], shuffled[index]];
   }
-  return shuffled.slice(0, count).map((question) => ({ ...question, answered: false, correct: false, selectedAnswer: null }));
+  return shuffled;
 }
 
 function updateProgress() {
@@ -114,7 +116,16 @@ function answerQuestion(index, selectedAnswer) {
 
 function startNewQuiz() {
   celebrationElement.hidden = true;
-  currentQuestions = chooseRandomQuestions(allQuestions, QUESTION_COUNT);
+  // Start a fresh shuffled deck after the eighth set has been used.
+  if (remainingQuestions.length < QUESTION_COUNT) {
+    remainingQuestions = shuffleQuestions(allQuestions);
+    currentSetNumber = 1;
+  } else {
+    currentSetNumber = (currentSetNumber % 8) + 1;
+  }
+  document.querySelector("#set-count").textContent = `セット ${currentSetNumber} / 8`;
+  currentQuestions = remainingQuestions.splice(0, QUESTION_COUNT)
+    .map((question) => ({ ...question, answered: false, correct: false, selectedAnswer: null }));
   renderQuestions();
 }
 
