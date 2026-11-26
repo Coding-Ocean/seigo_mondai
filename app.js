@@ -136,12 +136,16 @@ function mountQuizApp() {
   const statusElement = document.querySelector("#status");
   const questionListElement = document.querySelector("#question-list");
   const celebrationElement = document.querySelector("#celebration");
+  const perfectCycleDialog = document.querySelector("#perfect-cycle");
+  const closePerfectCycleButton = document.querySelector("#close-perfect-cycle");
   const progressElement = document.querySelector("#progress");
   const newQuestionsButton = document.querySelector("#new-questions");
 
   let deck = null;
   let currentQuestions = [];
   let cardViews = [];
+  let currentSetNumber = 0;
+  let cycleCorrectCount = 0;
 
   function setLoadingState() {
     statusElement.className = "status loading";
@@ -205,6 +209,27 @@ function mountQuizApp() {
     } else if (!isPerfect) {
       celebrationElement.hidden = true;
     }
+
+    const completedCyclePerfectly =
+      allAnswered &&
+      deck &&
+      currentSetNumber === deck.totalSets &&
+      correctCount === QUESTION_COUNT &&
+      cycleCorrectCount === deck.totalSets * QUESTION_COUNT;
+    if (completedCyclePerfectly && !perfectCycleDialog.open) {
+      perfectCycleDialog.showModal();
+      const confetti = perfectCycleDialog.querySelector(".grand-confetti");
+      confetti.replaceChildren();
+      for (let i = 0; i < 72; i += 1) {
+        const piece = document.createElement("i");
+        piece.style.setProperty("--x", `${Math.random() * 100}%`);
+        piece.style.setProperty("--hue", String(Math.floor(Math.random() * 360)));
+        piece.style.setProperty("--delay", `${Math.random() * 1.5}s`);
+        piece.style.setProperty("--duration", `${2.4 + Math.random() * 2.2}s`);
+        piece.style.setProperty("--spin", `${Math.random() * 720 - 360}deg`);
+        confetti.append(piece);
+      }
+    }
   }
 
   function answerQuestion(index, selectedAnswer) {
@@ -217,6 +242,9 @@ function mountQuizApp() {
     question.answered = true;
     question.selectedAnswer = selectedAnswer;
     question.correct = selectedAnswer === question.answer;
+    if (question.correct) {
+      cycleCorrectCount += 1;
+    }
 
     view.buttons.forEach((button) => {
       button.disabled = true;
@@ -293,6 +321,10 @@ function mountQuizApp() {
       return;
     }
     const next = deck.drawNextSet();
+    if (next.setNumber === 1) {
+      cycleCorrectCount = 0;
+    }
+    currentSetNumber = next.setNumber;
     currentQuestions = next.questions;
     renderCurrentSet(next.setNumber, next.totalSets);
   }
@@ -313,6 +345,7 @@ function mountQuizApp() {
   }
 
   newQuestionsButton.addEventListener("click", startNextSet);
+  closePerfectCycleButton.addEventListener("click", () => perfectCycleDialog.close());
   window.addEventListener("error", (event) => {
     if (!deck) {
       showError(`問題の初期化中にエラーが発生しました: ${event.message}`);
