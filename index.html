@@ -7,7 +7,7 @@
   <title>C言語の正誤問題</title>
   <link rel="stylesheet" href="styles.css">
   <script src="questions-data.js" defer></script>
-  <script src="app.js" defer></script>
+  <script src="app.js?v=perfect-cycle-2" defer></script>
 </head>
 <body>
   <main class="page-shell">
@@ -41,7 +41,7 @@
       </footer>
     </section>
 
-    <dialog id="perfect-cycle" class="perfect-cycle" aria-labelledby="perfect-cycle-title">
+    <div id="perfect-cycle" class="perfect-cycle" role="alert" aria-live="assertive" aria-labelledby="perfect-cycle-title" hidden>
       <div class="grand-firework grand-firework-left" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
       <div class="grand-firework grand-firework-right" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
       <div class="grand-confetti" aria-hidden="true"></div>
@@ -52,7 +52,7 @@
         <p>8セットすべてパーフェクト！<br>見事なチャレンジ達成です。</p>
         <button id="close-perfect-cycle" class="new-button" type="button">閉じる</button>
       </div>
-    </dialog>
+    </div>
   </main>
 </body>
 </html>

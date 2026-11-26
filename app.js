@@ -144,7 +144,7 @@ function mountQuizApp() {
   let deck = null;
   let currentQuestions = [];
   let cardViews = [];
-  let currentSetNumber = 0;
+  let cycleAnsweredCount = 0;
   let cycleCorrectCount = 0;
 
   function setLoadingState() {
@@ -210,13 +210,12 @@ function mountQuizApp() {
       celebrationElement.hidden = true;
     }
 
+    const cycleQuestionCount = deck ? deck.totalSets * QUESTION_COUNT : 0;
     const completedCyclePerfectly =
       allAnswered &&
-      deck &&
-      currentSetNumber === deck.totalSets &&
-      correctCount === QUESTION_COUNT &&
-      cycleCorrectCount === deck.totalSets * QUESTION_COUNT;
-    if (completedCyclePerfectly && !perfectCycleDialog.open) {
+      cycleAnsweredCount === cycleQuestionCount &&
+      cycleCorrectCount === cycleQuestionCount;
+    if (completedCyclePerfectly && perfectCycleDialog.hidden) {
       const confetti = perfectCycleDialog.querySelector(".grand-confetti");
       confetti.replaceChildren();
       for (let i = 0; i < 72; i += 1) {
@@ -228,17 +227,8 @@ function mountQuizApp() {
         piece.style.setProperty("--spin", `${Math.random() * 720 - 360}deg`);
         confetti.append(piece);
       }
-      if (typeof perfectCycleDialog.showModal === "function") {
-        try {
-          perfectCycleDialog.showModal();
-        } catch {
-          perfectCycleDialog.setAttribute("open", "");
-          perfectCycleDialog.classList.add("is-visible");
-        }
-      } else {
-        perfectCycleDialog.setAttribute("open", "");
-        perfectCycleDialog.classList.add("is-visible");
-      }
+      perfectCycleDialog.hidden = false;
+      closePerfectCycleButton.focus();
     }
   }
 
@@ -252,6 +242,7 @@ function mountQuizApp() {
     question.answered = true;
     question.selectedAnswer = selectedAnswer;
     question.correct = selectedAnswer === question.answer;
+    cycleAnsweredCount += 1;
     if (question.correct) {
       cycleCorrectCount += 1;
     }
@@ -332,9 +323,9 @@ function mountQuizApp() {
     }
     const next = deck.drawNextSet();
     if (next.setNumber === 1) {
+      cycleAnsweredCount = 0;
       cycleCorrectCount = 0;
     }
-    currentSetNumber = next.setNumber;
     currentQuestions = next.questions;
     renderCurrentSet(next.setNumber, next.totalSets);
   }
@@ -356,11 +347,8 @@ function mountQuizApp() {
 
   newQuestionsButton.addEventListener("click", startNextSet);
   closePerfectCycleButton.addEventListener("click", () => {
-    if (typeof perfectCycleDialog.close === "function") {
-      perfectCycleDialog.close();
-    }
-    perfectCycleDialog.removeAttribute("open");
-    perfectCycleDialog.classList.remove("is-visible");
+    perfectCycleDialog.hidden = true;
+    newQuestionsButton.focus();
   });
   window.addEventListener("error", (event) => {
     if (!deck) {

@@ -420,29 +420,22 @@ h1 {
 
 .perfect-cycle {
   position: fixed;
-  width: min(640px, calc(100% - 32px));
-  max-width: none;
-  max-height: min(760px, calc(100% - 32px));
+  z-index: 1000;
+  inset: 0;
+  display: grid;
+  place-items: center;
   overflow: hidden;
-  padding: 0;
-  border: 1px solid #ffe28a;
-  border-radius: 26px;
-  background: radial-gradient(ellipse at 50% 0%, #fff5c5, #fff 58%, #f7f1ff);
-  color: #202b3c;
-  box-shadow: 0 28px 100px rgba(5, 7, 19, 0.75);
-}
-
-.perfect-cycle::backdrop {
-  background: rgba(8, 11, 24, 0.86);
+  padding: 16px;
+  background: rgba(8, 11, 24, 0.9);
   backdrop-filter: blur(8px);
 }
 
-.perfect-cycle[open] {
-  animation: grand-entry 0.65s cubic-bezier(0.16, 0.85, 0.28, 1) both;
+.perfect-cycle[hidden] {
+  display: none;
 }
 
-.perfect-cycle.is-visible {
-  display: block;
+.perfect-cycle:not([hidden]) {
+  animation: grand-entry 0.65s cubic-bezier(0.16, 0.85, 0.28, 1) both;
 }
 
 .perfect-cycle-content {
@@ -450,7 +443,15 @@ h1 {
   z-index: 2;
   display: grid;
   justify-items: center;
+  width: min(640px, 100%);
+  max-height: 100%;
+  overflow: auto;
   padding: clamp(32px, 7vw, 58px) 22px 34px;
+  border: 1px solid #ffe28a;
+  border-radius: 26px;
+  background: radial-gradient(ellipse at 50% 0%, #fff5c5, #fff 58%, #f7f1ff);
+  color: #202b3c;
+  box-shadow: 0 28px 100px rgba(5, 7, 19, 0.75);
   text-align: center;
 }
 
