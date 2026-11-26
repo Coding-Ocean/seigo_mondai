@@ -217,7 +217,6 @@ function mountQuizApp() {
       correctCount === QUESTION_COUNT &&
       cycleCorrectCount === deck.totalSets * QUESTION_COUNT;
     if (completedCyclePerfectly && !perfectCycleDialog.open) {
-      perfectCycleDialog.showModal();
       const confetti = perfectCycleDialog.querySelector(".grand-confetti");
       confetti.replaceChildren();
       for (let i = 0; i < 72; i += 1) {
@@ -228,6 +227,17 @@ function mountQuizApp() {
         piece.style.setProperty("--duration", `${2.4 + Math.random() * 2.2}s`);
         piece.style.setProperty("--spin", `${Math.random() * 720 - 360}deg`);
         confetti.append(piece);
+      }
+      if (typeof perfectCycleDialog.showModal === "function") {
+        try {
+          perfectCycleDialog.showModal();
+        } catch {
+          perfectCycleDialog.setAttribute("open", "");
+          perfectCycleDialog.classList.add("is-visible");
+        }
+      } else {
+        perfectCycleDialog.setAttribute("open", "");
+        perfectCycleDialog.classList.add("is-visible");
       }
     }
   }
@@ -345,7 +355,13 @@ function mountQuizApp() {
   }
 
   newQuestionsButton.addEventListener("click", startNextSet);
-  closePerfectCycleButton.addEventListener("click", () => perfectCycleDialog.close());
+  closePerfectCycleButton.addEventListener("click", () => {
+    if (typeof perfectCycleDialog.close === "function") {
+      perfectCycleDialog.close();
+    }
+    perfectCycleDialog.removeAttribute("open");
+    perfectCycleDialog.classList.remove("is-visible");
+  });
   window.addEventListener("error", (event) => {
     if (!deck) {
       showError(`問題の初期化中にエラーが発生しました: ${event.message}`);

@@ -441,6 +441,10 @@ h1 {
   animation: grand-entry 0.65s cubic-bezier(0.16, 0.85, 0.28, 1) both;
 }
 
+.perfect-cycle.is-visible {
+  display: block;
+}
+
 .perfect-cycle-content {
   position: relative;
   z-index: 2;
