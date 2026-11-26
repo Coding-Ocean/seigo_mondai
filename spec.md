@@ -51,7 +51,7 @@
 
 ## 9. 技術・実行条件
 - HTML、CSS、JavaScriptのみで動作し、サーバー側の採点処理やデータベースを必要としない。
-- `mondai.md` の取得に `fetch` を使うため、ページはローカルHTTPサーバーまたはWebサーバー経由で開く。file:// 直開きは動作対象外とする。
+- 問題データは `questions-data.js` に同梱し、HTMLから読み込む。`index.html`、`app.js`、`styles.css`、`questions-data.js` を同じフォルダーに配置すれば、`file://` から直接開ける。
 - 外部ライブラリ、外部サービスへの接続は使用しない。
 
 ## 10. 受け入れ条件
