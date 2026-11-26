@@ -91,42 +91,43 @@ function createDeckState(questions, questionCount = QUESTION_COUNT, randomFn = M
   return { drawNextSet };
 }
 
-async function loadQuizMarkdown() {
-  const bundledMarkdown =
-    typeof window !== "undefined" &&
-    window.QUIZ_DATA &&
-    typeof window.QUIZ_DATA.markdown === "string"
-      ? window.QUIZ_DATA.markdown
-      : null;
+async function loadQuizData() {
+  const data = typeof window !== "undefined" ? window.QUIZ_DATA : null;
+  if (!data || typeof data !== "object") {
+    throw new Error(
+      "問題データを読み込めませんでした。同じフォルダーに questions-data.js があるか確認してください。"
+    );
+  }
 
-  // On HTTP(S), prefer reading mondai.md directly so edits take effect immediately.
-  if (typeof window !== "undefined" && window.location.protocol !== "file:" && typeof fetch === "function") {
-    try {
-      const response = await fetch("mondai.md", { cache: "no-store" });
-      if (response.ok) {
-        return await response.text();
-      }
-      if (response.status !== 404) {
-        throw new Error(`mondai.md を取得できませんでした（HTTP ${response.status}）。`);
-      }
-    } catch (error) {
-      if (bundledMarkdown === null) {
-        throw new Error(
-          error instanceof Error && error.message.startsWith("mondai.md")
-            ? error.message
-            : "問題データを取得できませんでした。mondai.md または questions-data.js を同じフォルダーに配置してください。"
-        );
-      }
+  // Support the current generated format: { title, questions: [{ text, answer }] }.
+  if (Array.isArray(data.questions)) {
+    const title = typeof data.title === "string" ? data.title.trim() : "";
+    if (!title) {
+      throw new Error("questions-data.js にタイトルがありません。");
     }
+    const questions = data.questions.map((question, index) => {
+      if (
+        !question ||
+        typeof question.text !== "string" ||
+        !question.text.trim() ||
+        !ANSWER_CHOICES.includes(question.answer)
+      ) {
+        throw new Error(`questions-data.js の${index + 1}問目の形式が正しくありません。`);
+      }
+      return { text: question.text.trim(), answer: question.answer };
+    });
+    if (questions.length < QUESTION_COUNT) {
+      throw new Error(`有効な問題が${questions.length}問しかありません。出題には${QUESTION_COUNT}問以上必要です。`);
+    }
+    return { title, questions };
   }
 
-  if (bundledMarkdown !== null) {
-    return bundledMarkdown;
+  // Backward compatibility for an older generated file containing Markdown.
+  if (typeof data.markdown === "string") {
+    return parseQuestions(data.markdown);
   }
 
-  throw new Error(
-    "問題データを読み込めませんでした。同じフォルダーに questions-data.js（または mondai.md）があるか確認してください。"
-  );
+  throw new Error("questions-data.js の形式が正しくありません。title と questions を確認してください。");
 }
 
 function mountQuizApp() {
@@ -299,8 +300,7 @@ function mountQuizApp() {
   async function initialize() {
     setLoadingState();
     try {
-      const markdown = await loadQuizMarkdown();
-      const { title, questions } = parseQuestions(markdown);
+      const { title, questions } = await loadQuizData();
       deck = createDeckState(questions, QUESTION_COUNT);
       pageTitleElement.textContent = title;
       document.title = title;
