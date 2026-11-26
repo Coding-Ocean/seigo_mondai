@@ -1,158 +1,336 @@
 const QUESTION_COUNT = 5;
-
-const statusElement = document.querySelector("#status");
-const questionList = document.querySelector("#question-list");
-const newQuestionsButton = document.querySelector("#new-questions");
-const progressElement = document.querySelector("#progress");
-const celebrationElement = document.querySelector("#celebration");
-
-let allQuestions = [];
-let currentQuestions = [];
-let remainingQuestions = [];
-let currentSetNumber = 0;
+const ANSWER_CHOICES = ["正", "誤"];
 
 function parseQuestions(markdown) {
+  if (typeof markdown !== "string") {
+    throw new Error("問題データの形式が文字列ではありません。");
+  }
+
   const lines = markdown.replace(/^\uFEFF/, "").split(/\r?\n/);
   const titleIndex = lines.findIndex((line) => line.trim() !== "");
-  if (titleIndex === -1) throw new Error("問題データが空です。");
+  if (titleIndex === -1) {
+    throw new Error("問題データが空です。タイトルと問題文を確認してください。");
+  }
 
-  const title = lines[titleIndex].trim().replace(/^#+\s*/, "");
+  const title = lines[titleIndex].trim().replace(/^#+\s*/, "").trim();
+  if (!title) {
+    throw new Error(`${titleIndex + 1}行目のタイトルが空です。`);
+  }
+
   const questions = [];
-
-  for (const [offset, line] of lines.slice(titleIndex + 1).entries()) {
-    if (!line.trim()) continue;
-    const match = line.match(/^\s*・\s*(.+?)\s+(正|誤)\s*$/);
-    if (!match) {
-      throw new Error(`${titleIndex + offset + 2}行目の形式を読み取れません。問題文の後に「正」または「誤」を指定してください。`);
+  for (let i = titleIndex + 1; i < lines.length; i += 1) {
+    const line = lines[i];
+    if (!line.trim()) {
+      continue;
     }
-    questions.push({ text: match[1].trim(), answer: match[2] });
+
+    const match = line.match(/^\s*・\s*(\S.*?)\s+(正|誤)\s*$/);
+    if (!match) {
+      throw new Error(
+        `問題データを読み込めませんでした（${i + 1}行目の形式が正しくありません。「・問題文 正」または「・問題文 誤」の形式で記述してください）。`
+      );
+    }
+
+    questions.push({
+      text: match[1].trim(),
+      answer: match[2],
+    });
   }
 
   if (questions.length < QUESTION_COUNT) {
-    throw new Error(`有効な問題が${questions.length}問です。出題には${QUESTION_COUNT}問以上必要です。`);
+    throw new Error(
+      `有効な問題が${questions.length}問しかありません。出題には${QUESTION_COUNT}問以上必要です。`
+    );
   }
+
   return { title, questions };
 }
 
-function shuffleQuestions(questions) {
+function shuffleQuestions(questions, randomFn = Math.random) {
   const shuffled = [...questions];
-  // Fisher–Yates shuffle gives each possible ordering equal probability.
-  for (let index = shuffled.length - 1; index > 0; index -= 1) {
-    const other = Math.floor(Math.random() * (index + 1));
-    [shuffled[index], shuffled[other]] = [shuffled[other], shuffled[index]];
+  // Fisher–Yates shuffle gives every permutation equal probability.
+  for (let i = shuffled.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(randomFn() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
   }
   return shuffled;
 }
 
-function updateProgress() {
-  const answered = currentQuestions.filter((question) => question.answered).length;
-  progressElement.textContent = `回答 ${answered} / ${currentQuestions.length} 問`;
-  const perfect = answered === QUESTION_COUNT && currentQuestions.every((question) => question.correct);
-  if (perfect && celebrationElement.hidden) {
+function createDeckState(questions, questionCount = QUESTION_COUNT, randomFn = Math.random) {
+  if (!Array.isArray(questions) || questions.length < questionCount) {
+    throw new Error(`有効な問題が${questionCount}問未満のため、出題を開始できません。`);
+  }
+
+  const totalSets = Math.floor(questions.length / questionCount);
+  let remaining = [];
+  let setNumber = 0;
+
+  function drawNextSet() {
+    if (remaining.length < questionCount) {
+      remaining = shuffleQuestions(questions, randomFn);
+      setNumber = 1;
+    } else {
+      setNumber += 1;
+    }
+
+    const selected = remaining.splice(0, questionCount).map((question) => ({
+      text: question.text,
+      answer: question.answer,
+      answered: false,
+      selectedAnswer: null,
+      correct: false,
+    }));
+
+    return {
+      setNumber,
+      totalSets,
+      questions: selected,
+    };
+  }
+
+  return { drawNextSet };
+}
+
+async function loadQuizMarkdown() {
+  const bundledMarkdown =
+    typeof window !== "undefined" &&
+    window.QUIZ_DATA &&
+    typeof window.QUIZ_DATA.markdown === "string"
+      ? window.QUIZ_DATA.markdown
+      : null;
+
+  // On HTTP(S), prefer reading mondai.md directly so edits take effect immediately.
+  if (typeof window !== "undefined" && window.location.protocol !== "file:" && typeof fetch === "function") {
+    try {
+      const response = await fetch("mondai.md", { cache: "no-store" });
+      if (response.ok) {
+        return await response.text();
+      }
+      if (response.status !== 404) {
+        throw new Error(`mondai.md を取得できませんでした（HTTP ${response.status}）。`);
+      }
+    } catch (error) {
+      if (bundledMarkdown === null) {
+        throw new Error(
+          error instanceof Error && error.message.startsWith("mondai.md")
+            ? error.message
+            : "問題データを取得できませんでした。mondai.md または questions-data.js を同じフォルダーに配置してください。"
+        );
+      }
+    }
+  }
+
+  if (bundledMarkdown !== null) {
+    return bundledMarkdown;
+  }
+
+  throw new Error(
+    "問題データを読み込めませんでした。同じフォルダーに questions-data.js（または mondai.md）があるか確認してください。"
+  );
+}
+
+function mountQuizApp() {
+  const pageTitleElement = document.querySelector("#page-title");
+  const setCountElement = document.querySelector("#set-count");
+  const statusElement = document.querySelector("#status");
+  const questionListElement = document.querySelector("#question-list");
+  const celebrationElement = document.querySelector("#celebration");
+  const progressElement = document.querySelector("#progress");
+  const newQuestionsButton = document.querySelector("#new-questions");
+
+  let deck = null;
+  let currentQuestions = [];
+  let cardViews = [];
+
+  function setLoadingState() {
+    statusElement.className = "status loading";
+    statusElement.setAttribute("role", "status");
+    statusElement.textContent = "問題を読み込み中です…";
+    setCountElement.hidden = true;
+    newQuestionsButton.hidden = true;
+    newQuestionsButton.disabled = true;
+    progressElement.textContent = "";
+    celebrationElement.hidden = true;
+  }
+
+  function showError(message) {
+    statusElement.className = "status error";
+    statusElement.setAttribute("role", "alert");
+    statusElement.textContent = message;
+    questionListElement.replaceChildren();
+    setCountElement.hidden = true;
+    setCountElement.textContent = "";
+    progressElement.textContent = "";
+    celebrationElement.hidden = true;
+    newQuestionsButton.hidden = true;
+    newQuestionsButton.disabled = true;
+  }
+
+  function clearStatus() {
+    statusElement.className = "status";
+    statusElement.setAttribute("role", "status");
+    statusElement.textContent = "";
+  }
+
+  function replayCelebration() {
     celebrationElement.hidden = false;
-    // Replay the small burst animation whenever a new perfect set is completed.
     celebrationElement.querySelectorAll(".firework, .firework span").forEach((spark) => {
       spark.style.animation = "none";
       void spark.offsetWidth;
       spark.style.animation = "";
     });
-  } else if (!perfect) {
+  }
+
+  function updateProgress() {
+    const answeredCount = currentQuestions.filter((q) => q.answered).length;
+    const correctCount = currentQuestions.filter((q) => q.correct).length;
+    const allAnswered =
+      currentQuestions.length > 0 && answeredCount === currentQuestions.length;
+
+    if (allAnswered) {
+      progressElement.textContent = `回答 ${answeredCount} / ${currentQuestions.length} 問（${correctCount}問正解）`;
+    } else {
+      progressElement.textContent = `回答 ${answeredCount} / ${currentQuestions.length} 問`;
+    }
+
+    newQuestionsButton.hidden = !allAnswered;
+    newQuestionsButton.disabled = !allAnswered;
+
+    const isPerfect =
+      answeredCount === QUESTION_COUNT &&
+      currentQuestions.every((question) => question.correct);
+    if (isPerfect && celebrationElement.hidden) {
+      replayCelebration();
+    } else if (!isPerfect) {
+      celebrationElement.hidden = true;
+    }
+  }
+
+  function answerQuestion(index, selectedAnswer) {
+    const question = currentQuestions[index];
+    const view = cardViews[index];
+    if (!question || !view || question.answered) {
+      return;
+    }
+
+    question.answered = true;
+    question.selectedAnswer = selectedAnswer;
+    question.correct = selectedAnswer === question.answer;
+
+    view.buttons.forEach((button) => {
+      button.disabled = true;
+      const isSelected = button.dataset.choice === selectedAnswer;
+      button.setAttribute("aria-pressed", String(isSelected));
+      if (isSelected) {
+        button.classList.add("selected", question.correct ? "is-correct" : "is-incorrect");
+      }
+    });
+
+    view.result.className = `result ${question.correct ? "correct" : "incorrect"}`;
+    view.result.textContent = question.correct ? "正解" : "不正解";
+
+    updateProgress();
+  }
+
+  function renderCurrentSet(setNumber, totalSets) {
+    setCountElement.hidden = false;
+    setCountElement.textContent = `セット ${setNumber} / ${totalSets}`;
     celebrationElement.hidden = true;
+
+    const fragment = document.createDocumentFragment();
+    cardViews = currentQuestions.map((question, index) => {
+      const item = document.createElement("li");
+      item.className = "question-card";
+
+      const number = document.createElement("span");
+      number.className = "question-number";
+      number.setAttribute("aria-hidden", "true");
+      number.textContent = String(index + 1);
+
+      const text = document.createElement("p");
+      text.className = "question-text";
+      text.textContent = question.text;
+
+      const controls = document.createElement("div");
+      controls.className = "answer-controls";
+
+      const buttonsGroup = document.createElement("div");
+      buttonsGroup.className = "answer-buttons";
+      buttonsGroup.setAttribute("role", "group");
+      buttonsGroup.setAttribute("aria-label", `問題${index + 1}の回答`);
+
+      const buttons = ANSWER_CHOICES.map((choice) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "answer-button";
+        button.dataset.choice = choice;
+        button.textContent = choice;
+        button.setAttribute("aria-label", `問題${index + 1}: ${choice}と回答する`);
+        button.setAttribute("aria-pressed", "false");
+        button.addEventListener("click", () => answerQuestion(index, choice));
+        buttonsGroup.append(button);
+        return button;
+      });
+
+      const result = document.createElement("span");
+      result.className = "result";
+      result.setAttribute("aria-live", "polite");
+
+      controls.append(buttonsGroup, result);
+      item.append(number, text, controls);
+      fragment.append(item);
+
+      return { item, buttons, result };
+    });
+
+    questionListElement.replaceChildren(fragment);
+    updateProgress();
   }
-}
 
-function renderQuestions() {
-  questionList.replaceChildren();
-  currentQuestions.forEach((question, index) => {
-    const item = document.createElement("li");
-    item.className = "question-card";
-
-    const number = document.createElement("span");
-    number.className = "question-number";
-    number.setAttribute("aria-hidden", "true");
-    number.textContent = String(index + 1);
-
-    const content = document.createElement("div");
-    content.className = "question-content";
-    const text = document.createElement("p");
-    text.className = "question-text";
-    text.textContent = question.text;
-
-    const answerRow = document.createElement("div");
-    answerRow.className = "answer-row";
-    answerRow.setAttribute("aria-label", `問題${index + 1}の回答`);
-    for (const answer of ["正", "誤"]) {
-      const button = document.createElement("button");
-      button.type = "button";
-      button.className = "answer-button";
-      button.textContent = answer;
-      button.setAttribute("aria-label", `${answer}と回答する`);
-      button.disabled = question.answered;
-      if (question.answered && question.selectedAnswer === answer) button.classList.add("selected");
-      button.addEventListener("click", () => answerQuestion(index, answer));
-      answerRow.append(button);
+  function startNextSet() {
+    if (!deck) {
+      return;
     }
+    const next = deck.drawNextSet();
+    currentQuestions = next.questions;
+    renderCurrentSet(next.setNumber, next.totalSets);
+  }
 
-    const result = document.createElement("span");
-    result.className = `result${question.answered ? (question.correct ? " correct" : " incorrect") : ""}`;
-    result.setAttribute("aria-live", "polite");
-    result.textContent = question.answered ? (question.correct ? "正解" : "不正解") : "";
-    answerRow.append(result);
-    content.append(text, answerRow);
-    item.append(number, content);
-    questionList.append(item);
+  async function initialize() {
+    setLoadingState();
+    try {
+      const markdown = await loadQuizMarkdown();
+      const { title, questions } = parseQuestions(markdown);
+      deck = createDeckState(questions, QUESTION_COUNT);
+      pageTitleElement.textContent = title;
+      document.title = title;
+      clearStatus();
+      startNextSet();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      showError(message);
+    }
+  }
+
+  newQuestionsButton.addEventListener("click", startNextSet);
+  window.addEventListener("error", (event) => {
+    if (!deck) {
+      showError(`問題の初期化中にエラーが発生しました: ${event.message}`);
+    }
   });
-  updateProgress();
+
+  initialize();
 }
 
-function answerQuestion(index, selectedAnswer) {
-  const question = currentQuestions[index];
-  if (!question || question.answered) return;
-  question.answered = true;
-  question.selectedAnswer = selectedAnswer;
-  question.correct = selectedAnswer === question.answer;
-  renderQuestions();
+if (typeof document !== "undefined") {
+  mountQuizApp();
 }
 
-function startNewQuiz() {
-  celebrationElement.hidden = true;
-  // Start a fresh shuffled deck after the eighth set has been used.
-  if (remainingQuestions.length < QUESTION_COUNT) {
-    remainingQuestions = shuffleQuestions(allQuestions);
-    currentSetNumber = 1;
-  } else {
-    currentSetNumber = (currentSetNumber % 8) + 1;
-  }
-  document.querySelector("#set-count").textContent = `セット ${currentSetNumber} / 8`;
-  currentQuestions = remainingQuestions.splice(0, QUESTION_COUNT)
-    .map((question) => ({ ...question, answered: false, correct: false, selectedAnswer: null }));
-  renderQuestions();
+if (typeof module !== "undefined" && module.exports) {
+  module.exports = {
+    QUESTION_COUNT,
+    parseQuestions,
+    shuffleQuestions,
+    createDeckState,
+  };
 }
-
-function initialize() {
-  try {
-    // The bundled data file allows this page to run directly from file://,
-    // where browsers block fetch() access to neighboring local files.
-    if (!window.QUIZ_DATA || !Array.isArray(window.QUIZ_DATA.questions)) {
-      throw new Error("同じフォルダーに questions-data.js がありません。");
-    }
-    const { title, questions } = window.QUIZ_DATA;
-    if (questions.length < QUESTION_COUNT) {
-      throw new Error(`有効な問題が${questions.length}問です。出題には${QUESTION_COUNT}問以上必要です。`);
-    }
-    allQuestions = questions;
-    document.querySelector("#page-title").textContent = title;
-    document.title = title;
-    statusElement.textContent = "";
-    newQuestionsButton.disabled = false;
-    startNewQuiz();
-  } catch (error) {
-    statusElement.classList.add("error");
-    statusElement.textContent = `問題を表示できませんでした。${error.message} HTTPサーバー経由でページを開き、mondai.md が同じフォルダーにあることを確認してください。`;
-    progressElement.textContent = "";
-    newQuestionsButton.disabled = true;
-  }
-}
-
-newQuestionsButton.addEventListener("click", startNewQuiz);
-initialize();
